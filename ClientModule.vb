@@ -15,11 +15,12 @@ Module ClientModule
 
     Public isConnected As Boolean = False
 
-    ' 🔑 PC ID (important!)
+    ' PC identity
     Public PCID As String = Environment.MachineName
+    Public PCNumber As Integer = -1
 
     ' ==========================
-    ' CONNECT TO SERVER
+    ' CONNECT
     ' ==========================
     Public Sub ConnectToServer()
         Try
@@ -31,9 +32,9 @@ Module ClientModule
             writer = New IO.StreamWriter(clientStream, Encoding.UTF8) With {.AutoFlush = True}
 
             isConnected = True
-            Console.WriteLine("Connected to server.")
+            Console.WriteLine("Connected to server")
 
-            ' 🔑 REGISTER PC
+            ' REGISTER
             writer.WriteLine("REGISTER|" & PCID)
 
             receiveThread = New Thread(AddressOf ReceiveData)
@@ -41,115 +42,59 @@ Module ClientModule
             receiveThread.Start()
 
         Catch ex As Exception
-            isConnected = False
-            Console.WriteLine("Failed to connect: " & ex.Message)
+            Console.WriteLine("Connect failed: " & ex.Message)
         End Try
     End Sub
 
     ' ==========================
-    ' SEND MESSAGE
-    ' ==========================
-    Public Sub SendMessage(message As String)
-        If isConnected Then
-            Try
-                writer.WriteLine(message)
-            Catch ex As Exception
-                Console.WriteLine("Send failed: " & ex.Message)
-            End Try
-        End If
-    End Sub
-
-    ' ==========================
-    ' RECEIVE LOOP
+    ' RECEIVE
     ' ==========================
     Private Sub ReceiveData()
         Try
             While isConnected
-                Dim msg As String = reader.ReadLine()
+                Dim msg = reader.ReadLine()
                 If msg Is Nothing Then Exit While
                 ProcessServerCommand(msg)
             End While
-        Catch ex As Exception
-            Console.WriteLine("Disconnected: " & ex.Message)
+        Catch
         Finally
             isConnected = False
         End Try
     End Sub
 
     ' ==========================
-    ' PROCESS SERVER COMMANDS
+    ' PROCESS COMMAND
     ' ==========================
     Private Sub ProcessServerCommand(msg As String)
-        Dim parts() As String = msg.Split("|"c)
+        Dim parts = msg.Split("|"c)
 
-        Select Case parts(0).ToUpper()
+        Select Case parts(0)
+
+            Case "ASSIGN_PC"
+                If parts(1) <> PCID Then Exit Sub
+
+                PCNumber = Integer.Parse(parts(2))
+
+                MessageBox.Show(
+        "PC Name: " & PCID & vbCrLf &
+        "Assigned PC Number: " & PCNumber,
+        "PC Registered",
+        MessageBoxButtons.OK,
+        MessageBoxIcon.Information
+    )
 
             Case "START_SESSION"
-                ' START_SESSION|PCID|SessionType|Amount
-                If parts(1) <> PCID Then Exit Sub
-
-                Dim amount As Decimal = Decimal.Parse(parts(3))
-                CLIENTDASHBOARD.Invoke(Sub()
-                                           CLIENTDASHBOARD.Hide()
-                                           CLIENTSESSION.SetPCName(PCID)
-                                           CLIENTSESSION.SetAmount(amount)
-                                           CLIENTSESSION.SetTime("00:00:00")
-                                           CLIENTSESSION.Show()
-                                           CLIENTSESSION.StartSessionTimer()
-                                       End Sub)
+                Console.WriteLine("SESSION STARTED")
 
             Case "END_SESSION"
-                ' END_SESSION|PCID
-                If parts(1) <> PCID Then Exit Sub
-
-                CLIENTSESSION.Invoke(Sub()
-                                         CLIENTSESSION.StopSessionTimer()
-                                         CLIENTSESSION.Hide()
-                                         CLIENTDASHBOARD.Show()
-                                     End Sub)
-
-            Case "UPDATE_AMOUNT"
-                ' UPDATE_AMOUNT|Amount
-                Dim amount As Decimal = Decimal.Parse(parts(1))
-                CLIENTSESSION.Invoke(Sub()
-                                         CLIENTSESSION.SetAmount(amount)
-                                     End Sub)
-
-            Case "SEND_MESSAGE"
-                ' SEND_MESSAGE|Text
-                CLIENTDASHBOARD.Invoke(Sub()
-                                           CLIENTDASHBOARD.SetMessage(parts(1))
-                                       End Sub)
+                Console.WriteLine("SESSION ENDED")
 
             Case "SHUTDOWN"
-                ' SHUTDOWN|PCID
-                If parts(1) <> PCID Then Exit Sub
-
-                CLIENTDASHBOARD.Invoke(Sub()
-                                           MessageBox.Show("PC will shutdown in 10 seconds.", "Shutdown",
-                                                           MessageBoxButtons.OK, MessageBoxIcon.Warning)
-                                       End Sub)
-
-                Thread.Sleep(10000)
-                Process.Start("shutdown", "/s /t 0")
+                Console.WriteLine("Shutdown command received")
 
             Case Else
-                Console.WriteLine("Unknown command: " & msg)
+                Console.WriteLine("Server says: " & msg)
         End Select
-    End Sub
-
-    ' ==========================
-    ' DISCONNECT CLEANLY
-    ' ==========================
-    Public Sub DisconnectClient()
-        Try
-            isConnected = False
-            reader?.Close()
-            writer?.Close()
-            clientStream?.Close()
-            client?.Close()
-        Catch
-        End Try
     End Sub
 
 End Module
